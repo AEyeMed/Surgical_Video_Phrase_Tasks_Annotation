@@ -335,24 +335,29 @@ class Window(QWidget):
 
         self.is_paused = False
 
+        qApp.installEventFilter(self)
         self.init_ui()
 
         self.showMaximized()
         
     def createMenuBar(self):
     # Create a layout
-        layout = QVBoxLayout(self) ### Bug
-
+        # menu_layout = QHBoxLayout(self) ### Bug
+        # menu_layout.setContentsMargins(0, 0, 0, 0) # Remove internal margins
+        # menu_layout.addStretch(1)
         # Create menu bar
         menuBar = QMenuBar(self)
-        layout.addWidget(menuBar)  # Add menu bar to the layout
-
+          # Add menu bar to the layout
+        # menu_layout.addWidget(menuBar)
+        
         # --- Apply StyleSheet to fix the black background ---
         # Set a light background for the menu bar itself
         menuBar.setStyleSheet("""
             QMenuBar {
                 background-color: lightgray; /* Or any color you prefer */
                 color: black; /* Ensure text is visible */
+                min-height: 20px; /* Set your desired minimum height */
+                max-height: 30px; /* Set your desired maximum height, often same as min-height */
             }
             QMenuBar::item {
                 spacing: 3px; /* space between menu bar items */
@@ -383,7 +388,59 @@ class Window(QWidget):
                 color: #b0b0b0;
             }
         """)
+        # menuBar.setStyleSheet("color: white")
+        fileMenu = menuBar.addMenu("&File")
+        HelpMenu = menuBar.addMenu("&Help")
+
+        openVideoAction = QAction("&Open Video", self)
+        openVideoAction.setShortcut("Ctrl+O")
+        openVideoAction.setStatusTip("Open Video")
+        openVideoAction.triggered.connect(self.open_video)
+
+        addPanelAction = QAction("&Add Panel", self)
+        addPanelAction.setStatusTip("Add Panel")
+        addPanelAction.triggered.connect(self.add_panel)
+
+        addTimePanelFileAction = QAction("&Add Timestamping Panel", self)
+        addTimePanelFileAction.setStatusTip("Add Timestamping Panel From File")
+        addTimePanelFileAction.triggered.connect(self.add_time_panel_from_file)
+
+        addRatingPanelFileAction = QAction("&Add Rating Panel", self)
+        addRatingPanelFileAction.setStatusTip("Add Rating Panel From File")
+        addRatingPanelFileAction.triggered.connect(self.add_rating_panel_from_file)
+
+        saveEntriesAction = QAction("&Save", self)
+        saveEntriesAction.setStatusTip("Save all entries")
+        saveEntriesAction.setShortcut("Ctrl+S")
+        saveEntriesAction.triggered.connect(self.save)
+
+        clearPanelsAction = QAction("&Clear Panels", self)
+        clearPanelsAction.setStatusTip("Clear all panels")
+        clearPanelsAction.setShortcut("Ctrl+C")
+        clearPanelsAction.triggered.connect(self.clearPanels)
+
+        changeSaveDirectoryAction = QAction("&Change Save Directory", self)
+        changeSaveDirectoryAction.setStatusTip("Change Save Directory")
+        changeSaveDirectoryAction.triggered.connect(self.changeDirectory)
+
+        exitAction = QAction("&Exit", self)
+        exitAction.setStatusTip("Exit")
+        exitAction.setShortcut("Ctrl+Q")
+        exitAction.triggered.connect(self.close)
+
+        # fileMenu.addAction(addPanelAction)
+        fileMenu.addAction(openVideoAction)
+        fileMenu.addAction(addTimePanelFileAction)
+        fileMenu.addAction(addRatingPanelFileAction)
+        fileMenu.addAction(changeSaveDirectoryAction)
+        fileMenu.addAction(saveEntriesAction)
+        fileMenu.addAction(clearPanelsAction)
+        fileMenu.addAction(exitAction)
+        
+        
+        
         return menuBar
+    
     def init_ui(self):
         # create the directory where the outputs for all videos are saved
 
@@ -471,16 +528,24 @@ class Window(QWidget):
         bottomLayout.addWidget(snapBtn)
         bottomLayout.addWidget(labelmeBtn)
 
+
+        # menuLayout = self.createMenuBar()
+        menuBar = self.createMenuBar()
+        
+        
         # create vbox layout
         vboxLayout = QVBoxLayout()
         # set widgets to the vbox layout
         # vboxLayout.addWidget(openBtn)
+        # vboxLayout.addLayout(menuLayout)
+        vboxLayout.addWidget(menuBar)
         vboxLayout.addWidget(self.videowidget)
         vboxLayout.addLayout(hboxLayout)
         vboxLayout.addLayout(bottomLayout)
         vboxLayout.addWidget(self.label)
 
         self.mainLayout = QHBoxLayout()
+        # self.mainLayout.addLayout(menuLayout)
         self.mainLayout.addLayout(vboxLayout)
 
         # create empty lists for the panels to be added
@@ -517,60 +582,43 @@ class Window(QWidget):
 
         # create menu bar
         # menuBar = QMenuBar(self)
-        menuBar = self.createMenuBar()
-        # menuBar.setStyleSheet("color: white")
-        fileMenu = menuBar.addMenu("&File")
-        HelpMenu = menuBar.addMenu("&Help")
+        
+        self.setup_video_click()
+        # self.setFocusPolicy(Qt.StrongFocus)
+        # self.setFocus()
+        # self.installEventFilter(self)
 
-        openVideoAction = QAction("&Open Video", self)
-        openVideoAction.setShortcut("Ctrl+O")
-        openVideoAction.setStatusTip("Open Video")
-        openVideoAction.triggered.connect(self.open_video)
+        
+        self.add_time_panel_from_file_predefined("samples/phase.txt")
+        self.add_time_panel_from_file_predefined("samples/task.txt")
+        # self.add_rating_panel_from_file_predefined("path/to/rating_panel1.txt")
+        # self.add_rating_panel_from_file_predefined("path/to/rating_panel2.txt")
+                
 
-        addPanelAction = QAction("&Add Panel", self)
-        addPanelAction.setStatusTip("Add Panel")
-        addPanelAction.triggered.connect(self.add_panel)
+        
+    def setup_video_click(self):
+        """Setup video widget to respond to mouse clicks"""
+        self.videowidget.mousePressEvent = self.video_clicked
 
-        addTimePanelFileAction = QAction("&Add Timestamping Panel", self)
-        addTimePanelFileAction.setStatusTip("Add Timestamping Panel From File")
-        addTimePanelFileAction.triggered.connect(self.add_time_panel_from_file)
+    def video_clicked(self, event):
+        """Handle video widget mouse clicks"""
+        if event.button() == Qt.LeftButton:
+            self.play_video()
+    def eventFilter(self, obj, event):
+        # 1) catch Space-down
+        if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Space:
+            self.play_video()    # toggle play/pause
+            return True          # STOP propagation to focused widget
 
-        addRatingPanelFileAction = QAction("&Add Rating Panel", self)
-        addRatingPanelFileAction.setStatusTip("Add Rating Panel From File")
-        addRatingPanelFileAction.triggered.connect(self.add_rating_panel_from_file)
+        # 2) otherwise default
+        return super().eventFilter(obj, event)
 
-        saveEntriesAction = QAction("&Save", self)
-        saveEntriesAction.setStatusTip("Save all entries")
-        saveEntriesAction.setShortcut("Ctrl+S")
-        saveEntriesAction.triggered.connect(self.save)
-
-        clearPanelsAction = QAction("&Clear Panels", self)
-        clearPanelsAction.setStatusTip("Clear all panels")
-        clearPanelsAction.setShortcut("Ctrl+C")
-        clearPanelsAction.triggered.connect(self.clearPanels)
-
-        changeSaveDirectoryAction = QAction("&Change Save Directory", self)
-        changeSaveDirectoryAction.setStatusTip("Change Save Directory")
-        changeSaveDirectoryAction.triggered.connect(self.changeDirectory)
-
-        exitAction = QAction("&Exit", self)
-        exitAction.setStatusTip("Exit")
-        exitAction.setShortcut("Ctrl+Q")
-        exitAction.triggered.connect(self.close)
-
-        # fileMenu.addAction(addPanelAction)
-        fileMenu.addAction(openVideoAction)
-        fileMenu.addAction(addTimePanelFileAction)
-        fileMenu.addAction(addRatingPanelFileAction)
-        fileMenu.addAction(changeSaveDirectoryAction)
-        fileMenu.addAction(saveEntriesAction)
-        fileMenu.addAction(clearPanelsAction)
-        fileMenu.addAction(exitAction)
 
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_Space:
             self.play_video()
-
+            event.accept()  # Prevent further propagation
+            return
         elif event.key() == Qt.Key_Right:
             p = self.slider.value()
             p = p + int(500000000 / self.media.get_duration())
@@ -761,6 +809,21 @@ class Window(QWidget):
         pass
         # self.mainLayout.removeWidget(self.scroll[panel_index]) deleteLater()
 
+    def add_time_panel_from_file_predefined(self, filepath):
+        if os.path.exists(filepath):
+            self.load_panel_from_file(filepath, self.add_time_panel_from_file)
+
+    def add_rating_panel_from_file_predefined(self, filepath):
+        if os.path.exists(filepath):
+            self.load_panel_from_file(filepath, self.add_rating_panel_from_file)
+
+    def load_panel_from_file(self, filepath, add_func):
+        # temporarily override QFileDialog for programmatic loading
+        original_getOpenFileName = QFileDialog.getOpenFileName
+        QFileDialog.getOpenFileName = lambda *args, **kwargs: (filepath, True)
+        add_func()
+        QFileDialog.getOpenFileName = original_getOpenFileName
+
     def add_time_panel_from_file(self):
         filename, _ = QFileDialog.getOpenFileName(
             self, "Open Text", filter="Text files (*.txt)"
@@ -858,8 +921,14 @@ class Window(QWidget):
                     self.saveEntryBtn[self.panel_index][i],
                     self.clearEntryBtn[self.panel_index][i],
                 )
+            # —————— Add “Save All” button for this time panel ——————
+            saveAllBtn = QPushButton("Save All")
+            # when clicked, call our helper save_panel(panel_index)
+            saveAllBtn.clicked.connect(lambda _, idx=self.panel_index: self.save_panel(idx))
+            self.formLayout[self.panel_index].addRow(saveAllBtn)
 
             self.groupbox[self.panel_index].setLayout(self.formLayout[self.panel_index])
+
             self.scroll[self.panel_index] = QScrollArea()
             self.scroll[self.panel_index].setWidget(self.groupbox[self.panel_index])
             self.scroll[self.panel_index].setWidgetResizable(True)
@@ -991,7 +1060,16 @@ class Window(QWidget):
                 # self.formLayout[self.panel_index].addRow(self.saveEntryBtn[self.panel_index][i],
                 #                                          self.clearEntryBtn[self.panel_index][i])
 
+            # —————— Add “Save All Ratings” button for this rating panel ——————
+            saveAllRatingsBtn = QPushButton("Save All Ratings")
+            saveAllRatingsBtn.clicked.connect(
+                lambda _, idx=self.panel_index: self.save_all_ratings(idx)
+            )
+            self.formLayout[self.panel_index].addRow(saveAllRatingsBtn)
+
             self.groupbox[self.panel_index].setLayout(self.formLayout[self.panel_index])
+            
+            
             self.scroll[self.panel_index] = QScrollArea()
             self.scroll[self.panel_index].setWidget(self.groupbox[self.panel_index])
             self.scroll[self.panel_index].setWidgetResizable(True)
@@ -1134,6 +1212,25 @@ class Window(QWidget):
 
         # self.startingTimelist[panel_index][i].setText('0')
         # self.endingTimelist[panel_index][i].setText('0')
+    def save_panel(self, panel_index):
+        """
+        Save every time-entry in this time-panel.
+        """
+        # loop through each task in this panel
+        for i in range(len(self.tasklist[panel_index])):
+            # only save if there’s a non-default interval
+            start = self.startingTimelist[panel_index][i].text()
+            end   = self.endingTimelist[panel_index][i].text()
+            if start != "0" or end != "0":
+                self.onsaveEntryBtnClicked(panel_index, i)
+    def save_all_ratings(self, panel_index):
+        """
+        Save all checked rating entries in this panel.
+        """
+        for i, btns in enumerate(self.ratingButtonslist[panel_index]):
+            # if any button in the group is selected
+            if any(b.isChecked() for b in btns):
+                self.save_rating_entry(panel_index, i)
 
     def onclearEntryBtnClicked(self, panel_index, i):
         self.saveEntryBtn[panel_index][i].setEnabled(False)
