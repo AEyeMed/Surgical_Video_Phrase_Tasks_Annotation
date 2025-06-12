@@ -22,7 +22,7 @@ import sys
 import os
 import platform
 import cv2
-import vlc
+
 from PyQt5.QtMultimedia import (
     QMediaContent,
     QMediaPlayer,
@@ -42,6 +42,13 @@ import subprocess
 import json
 import time
 
+
+QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
+
+USE_VLC = False
+if USE_VLC:
+    import vlc
 
 # class Slider(QSlider):
 #     def mousePressEvent(self, event, window):
@@ -274,47 +281,7 @@ class TimelineSlider(Slider):
                 
 ################### Slider end ####################              
                 
-################## Menu Bar ########################
-
-# class MenuBar(QMenuBar):
-#     menuBar = QMenuBar(self)
-#     self.setMenuBar(menuBar)
-#     # --- Apply StyleSheet to fix the black background ---
-#     # Set a light background for the menu bar itself
-#     menuBar.setStyleSheet("""
-#         QMenuBar {
-#             background-color: lightgray; /* Or any color you prefer */
-#             color: black; /* Ensure text is visible */
-#         }
-#         QMenuBar::item {
-#             spacing: 3px; /* space between menu bar items */
-#             padding: 1px 4px;
-#             background: transparent;
-#             color: black;
-#         }
-#         QMenuBar::item:selected { /* when selected using keyboard or mouse */
-#             background: #a8a8a8;
-#         }
-#         QMenuBar::item:pressed {
-#             background: #888888;
-#         }
-#         QMenu {
-#             background-color: white; /* Background for dropdown menus */
-#             border: 1px solid #888;
-#             color: black; /* Ensure text is visible */
-#         }
-#         QMenu::item {
-#             padding: 2px 25px 2px 20px;
-#             border: 1px solid transparent; /* reserve space for selection border */
-#         }
-#         QMenu::item:selected {
-#             border-color: darkblue;
-#             background-color: #f0f0f0; /* Light highlight on hover */
-#         }
-#         QMenu::item:disabled {
-#             color: #b0b0b0;
-#         }
-#     """)                
+       
             
 
 class Window(QWidget):
@@ -340,17 +307,16 @@ class Window(QWidget):
 
         self.showMaximized()
         
+        self.mediaPlayer = QMediaPlayer(None, QMediaPlayer.VideoSurface)
+        self.videowidget = QVideoWidget()
+        self.mediaPlayer.setVideoOutput(self.videowidget)
+        
     def createMenuBar(self):
-    # Create a layout
-        # menu_layout = QHBoxLayout(self) ### Bug
-        # menu_layout.setContentsMargins(0, 0, 0, 0) # Remove internal margins
-        # menu_layout.addStretch(1)
+
         # Create menu bar
         menuBar = QMenuBar(self)
-          # Add menu bar to the layout
-        # menu_layout.addWidget(menuBar)
-        
-        # --- Apply StyleSheet to fix the black background ---
+
+
         # Set a light background for the menu bar itself
         menuBar.setStyleSheet("""
             QMenuBar {
@@ -444,12 +410,13 @@ class Window(QWidget):
     def init_ui(self):
         # create the directory where the outputs for all videos are saved
 
-        self.instance = vlc.Instance()
-        self.media = None
-        # create media player object
-        self.mediaPlayer = (
-            self.instance.media_player_new()
-        )  # QMediaPlayer(None, QMediaPlayer.VideoSurface)
+        if USE_VLC:
+            self.instance = vlc.Instance()
+            self.media = None
+            # create media player object
+            self.mediaPlayer = (
+                self.instance.media_player_new()
+            )  # QMediaPlayer(None, QMediaPlayer.VideoSurface)
 
         # In this widget, the video will be drawn
         if platform.system() == "Darwin":  # for MacOS
@@ -535,6 +502,7 @@ class Window(QWidget):
         
         # create vbox layout
         vboxLayout = QVBoxLayout()
+        # vboxLayout.setMenuBar(menuBar) 
         # set widgets to the vbox layout
         # vboxLayout.addWidget(openBtn)
         # vboxLayout.addLayout(menuLayout)
@@ -865,6 +833,7 @@ class Window(QWidget):
                 self.form_title[self.panel_index]
             )  # , self.panelRemoveBtn[self.panel_index])
 
+            # panel_width = 200
             for i, line in enumerate(lines):
                 line = line.split("#")
 
@@ -876,6 +845,7 @@ class Window(QWidget):
                     QFont("Times", 10, weight=QFont.Bold)
                 )
                 self.tasklist[self.panel_index][i].setWordWrap(True)
+                # self.tasklist[self.panel_index][i].setFixedWidth(panel_width)
                 self.startingButtonlist[self.panel_index].append(QPushButton("starts"))
                 self.startingButtonlist[self.panel_index][i].setFixedWidth(50)
                 self.startingTimelist[self.panel_index].append(QLabel("0"))
@@ -923,6 +893,7 @@ class Window(QWidget):
                 )
             # —————— Add “Save All” button for this time panel ——————
             saveAllBtn = QPushButton("Save All")
+            # saveAllBtn.setFixedWidth(100) 
             # when clicked, call our helper save_panel(panel_index)
             saveAllBtn.clicked.connect(lambda _, idx=self.panel_index: self.save_panel(idx))
             self.formLayout[self.panel_index].addRow(saveAllBtn)
@@ -934,6 +905,12 @@ class Window(QWidget):
             self.scroll[self.panel_index].setWidgetResizable(True)
             self.scroll[self.panel_index].setFixedWidth(150)
             self.scroll[self.panel_index].setFocusPolicy(Qt.StrongFocus)
+            
+            # Calculate content-based width
+            # content_width = self.groupbox[self.panel_index].sizeHint().width()
+            # scrollbar_width = self.scroll[self.panel_index].verticalScrollBar().sizeHint().width()
+            # self.scroll[self.panel_index].setMinimumWidth(200 )
+
             self.mainLayout.addWidget(self.scroll[self.panel_index])
 
     def add_rating_panel_from_file(self):
