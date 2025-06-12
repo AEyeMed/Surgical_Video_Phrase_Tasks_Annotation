@@ -46,7 +46,7 @@ import time
 QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
 QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
 
-USE_VLC = False
+USE_VLC = True
 if USE_VLC:
     import vlc
 
@@ -307,9 +307,10 @@ class Window(QWidget):
 
         self.showMaximized()
         
-        self.mediaPlayer = QMediaPlayer(None, QMediaPlayer.VideoSurface)
-        self.videowidget = QVideoWidget()
-        self.mediaPlayer.setVideoOutput(self.videowidget)
+        if not USE_VLC:
+            self.mediaPlayer = QMediaPlayer(None, QMediaPlayer.VideoSurface)
+            self.videowidget = QVideoWidget()
+            self.mediaPlayer.setVideoOutput(self.videowidget)
         
     def createMenuBar(self):
 
