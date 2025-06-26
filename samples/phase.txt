@@ -1,5 +1,13 @@
-Establishment of pneumoperitoneum # description of the start moment # description of the end moment
-Placement of trocars
-Isolate gallbladder
-Remove gallbladder
-Closure
+主切口 # description of the start moment # description of the end moment
+侧切口制作
+前囊膜染色
+粘弹剂注入
+前房冲洗
+粘弹剂注入
+环形连续撕囊
+水分离
+水分层
+核处理
+皮质吸收
+IOL植入
+切口密闭

@@ -37,6 +37,7 @@ from PyQt5.QtCore import Qt, QUrl, pyqtSignal, QPoint, QRect, QObject
 from PyQt5.QtCore import *
 from PyQt5.QtWidgets import *
 from PyQt5 import QtWidgets
+from PyQt5 import QtCore
 from functools import partial
 import subprocess
 import json
@@ -50,28 +51,7 @@ USE_VLC = True
 if USE_VLC:
     import vlc
 
-# class Slider(QSlider):
-#     def mousePressEvent(self, event, window):
-#         if event.button() == Qt.LeftButton:
-#             event.accept()
-#             x = event.pos().x()
-#             value = (
-#                 self.maximum() - self.minimum()
-#             ) * x / self.width() + self.minimum()
-#             window.timer.stop()
-#             # pos = self.slider.value()
 
-#             window.mediaPlayer.set_position(value / 100000)
-#             window.timer.start()
-#         else:
-#             return super().mousePressEvent(window, event)
-
-#     def mouseMoveEvent(self, event, window):
-#         event.accept()
-#         x = event.pos().x()
-#         value = (self.maximum() - self.minimum()) * x / self.width() + self.minimum()
-#         window.mediaPlayer.set_position(value / 100000)
-#         self.setValue(value)
 class Slider(QSlider):
     def __init__(self, parent=None):
         super().__init__(Qt.Horizontal, parent)
@@ -280,9 +260,27 @@ class TimelineSlider(Slider):
                 painter.drawText(x - 15, self.height() - 20, time_text)
                 
 ################### Slider end ####################              
-                
-       
-            
+class ClickableOverlay(QtWidgets.QWidget):
+    clicked = QtCore.pyqtSignal()
+    def __init__(self, parent):
+        super().__init__(parent)
+        # 让它覆盖父窗口并接收所有鼠标事件
+        self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
+        self.setStyleSheet("background: rgba(0,0,0,0);")  # 完全透明
+        self.setGeometry(parent.rect())
+        parent.installEventFilter(self)  # 当父大小变化时，自动跟着 resize
+
+    def eventFilter(self, obj, ev):
+        if obj is self.parent() and ev.type() == QtCore.QEvent.Resize:
+            self.setGeometry(obj.rect())
+        return super().eventFilter(obj, ev)
+
+    def mousePressEvent(self, ev):
+        if ev.button() == QtCore.Qt.LeftButton:
+            self.clicked.emit()
+
+        
+                    
 
 class Window(QWidget):
     def __init__(self):
@@ -418,18 +416,26 @@ class Window(QWidget):
             self.mediaPlayer = (
                 self.instance.media_player_new()
             )  # QMediaPlayer(None, QMediaPlayer.VideoSurface)
-
+            # 告诉 libVLC：不要自己处理鼠标／键盘事件了
+            self.mediaPlayer.video_set_mouse_input(False)
+            self.mediaPlayer.video_set_key_input(False)
+            
+        self.fps = self.mediaPlayer.get_fps()
+            
         # In this widget, the video will be drawn
         if platform.system() == "Darwin":  # for MacOS
             self.videowidget = QtWidgets.QMacCocoaViewContainer(0)
         elif platform.system() == "Windows":
             self.videowidget = QtWidgets.QFrame()
+            # self.videowidget.setStyleSheet("background-color: black;") # 给个背景色，视频加载前能看到
+
+            # 3. 创建顶层的透明点击覆盖层
+            self.click_video_overlay = ClickableOverlay(self.videowidget)
+            self.click_video_overlay.clicked.connect(self.video_clicked)
+          
         else:
-            # self.videowidget = QtWidgets.QMacCocoaViewContainer(0)
             self.videowidget = QtWidgets.QFrame()
-        # create videowidget object
-        # self.videowidget = QVideoWidget()
-        self.videowidget_g = QVideoWidget()
+
 
         # create open button
         openBtn = QPushButton("Open Video")
@@ -441,8 +447,16 @@ class Window(QWidget):
         # snapBtn.setEnabled(True)
         self.ImagesBuffer = None
 
-        labelmeBtn = QPushButton("Annotate (labelme)")
+        labelmeBtn = QPushButton("(labelme)")
         labelmeBtn.clicked.connect(self.annotate)
+
+        ## create button for back and forward the video
+        backBtn = QPushButton("<--")
+        backBtn.setFixedWidth(50)
+        backBtn.clicked.connect(self.back_video)
+        forwardBtn = QPushButton("-->")     
+        forwardBtn.setFixedWidth(50)   
+        forwardBtn.clicked.connect(self.forward_video)
 
         # create button for playing
         self.playBtn = QPushButton()
@@ -495,6 +509,8 @@ class Window(QWidget):
         bottomLayout.addWidget(openBtn)
         bottomLayout.addWidget(snapBtn)
         bottomLayout.addWidget(labelmeBtn)
+        bottomLayout.addWidget(backBtn)
+        bottomLayout.addWidget(forwardBtn)
 
 
         # menuLayout = self.createMenuBar()
@@ -509,6 +525,7 @@ class Window(QWidget):
         # vboxLayout.addLayout(menuLayout)
         vboxLayout.addWidget(menuBar)
         vboxLayout.addWidget(self.videowidget)
+        # vboxLayout.addWidget(self.videowidget)
         vboxLayout.addLayout(hboxLayout)
         vboxLayout.addLayout(bottomLayout)
         vboxLayout.addWidget(self.label)
@@ -552,7 +569,7 @@ class Window(QWidget):
         # create menu bar
         # menuBar = QMenuBar(self)
         
-        self.setup_video_click()
+        # self.setup_video_click()
         # self.setFocusPolicy(Qt.StrongFocus)
         # self.setFocus()
         # self.installEventFilter(self)
@@ -565,46 +582,62 @@ class Window(QWidget):
                 
 
         
-    def setup_video_click(self):
-        """Setup video widget to respond to mouse clicks"""
-        self.videowidget.mousePressEvent = self.video_clicked
+    # def setup_video_click(self):
+    #     """Setup video widget to respond to mouse clicks"""
+    #     print("Setting up video click")  # 确认方法被调用
+    #     self.videowidget.mousePressEvent = self.video_clicked
+    #     # self.videowidget_g.installEventFilter(self)
 
-    def video_clicked(self, event):
+    def video_clicked(self):
         """Handle video widget mouse clicks"""
-        if event.button() == Qt.LeftButton:
-            self.play_video()
+        self.play_video()
+            
+    # def video_clicked(self, event):
+    #     """Handle video widget mouse clicks"""
+    #     if event.button() == Qt.LeftButton:
+    #         self.play_video()
     def eventFilter(self, obj, event):
+        # print(self)
         # 1) catch Space-down
         if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Space:
             self.play_video()    # toggle play/pause
             return True          # STOP propagation to focused widget
-
+        if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Left:
+            self.back_video()
+            return True
+        if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Right:
+            self.forward_video()
+            return True
+        # if obj == self.videowidget and event.type() == QEvent.MouseButtonPress:
+        #     if event.button() == Qt.LeftButton:
+        #         self.play_video()   
+        #         return True
         # 2) otherwise default
         return super().eventFilter(obj, event)
 
 
-    def keyPressEvent(self, event):
-        if event.key() == Qt.Key_Space:
-            self.play_video()
-            event.accept()  # Prevent further propagation
-            return
-        elif event.key() == Qt.Key_Right:
-            p = self.slider.value()
-            p = p + int(500000000 / self.media.get_duration())
-            self.set_position(p)
+    # def keyPressEvent(self, event):
+    #     if event.key() == Qt.Key_Space:
+    #         self.play_video()
+    #         event.accept()  # Prevent further propagation
+    #         return
+    #     elif event.key() == Qt.Key_Right:
+    #         p = self.slider.value()
+    #         p = p + int(500000000 / self.media.get_duration())
+    #         self.set_position(p)
 
-        elif event.key() == Qt.Key_Left:
+    #     elif event.key() == Qt.Key_Left:
 
-            p = self.slider.value()
-            p = p - int(500000000 / self.media.get_duration())
-            self.set_position(p)
+    #         p = self.slider.value()
+    #         p = p - int(500000000 / self.media.get_duration())
+    #         self.set_position(p)
 
-        elif event.key() == Qt.Key_F5:
+    #     elif event.key() == Qt.Key_F5:
 
-            self.close()
-        else:
+    #         self.close()
+    #     else:
 
-            super().keyPressEvent(event)
+    #         super().keyPressEvent(event)
 
     def open_video(self):
         # opens video file, create the directory for the videos outputs, play the video
@@ -673,6 +706,7 @@ class Window(QWidget):
                                     self.form_title[panel_index].text(),
                                 ),
                                 "a",
+                                encoding='utf-8',
                             ) as out:
                                 for i in range(len(self.groupButtonlist[panel_index])):
                                     out.write(
@@ -687,6 +721,7 @@ class Window(QWidget):
                                     self.form_title[panel_index].text(),
                                 ),
                                 "r",
+                                encoding='utf-8',
                             ) as f:
                                 lines = f.readlines()
                                 for line in lines:
@@ -744,7 +779,54 @@ class Window(QWidget):
             self.timer.start()
             self.is_paused = False
             self.playBtn.setIcon(self.style().standardIcon(QStyle.SP_MediaPause))
+    
+    def jump_frames(self, frame_count):
+        
+        # print()
+        
+        if self.fps <= 0:
+            self.fps = 25.0  # fallback
+        frame_duration_ms = 1000 / self.fps # fps60,每帧16ms
 
+        duration_ms = self.mediaPlayer.get_length()
+        print(duration_ms,' duration_ms')
+        # 当前 slider 百分比 → 当前时间点
+        current_pos = self.slider.value() / 100000.0
+        current_time = current_pos * duration_ms
+
+        # 计算新位置
+        new_time = current_time + frame_duration_ms * frame_count
+        new_time = min(new_time, duration_ms)
+        new_pos = new_time / duration_ms
+
+        # 设置新 slider 值
+        slider_val = int(new_pos * 100000)
+        self.slider.setValue(slider_val)
+        self.set_position(slider_val)
+        
+    def jump_slider_steps(self, step_count):
+            p = self.slider.value()
+            if step_count > 0:
+                p = p + int(step_count)
+            else:
+                p = p - int(abs(step_count))
+            
+            self.set_position(p)  
+            
+    def back_video(self):
+        self.jump_frames(-2)
+        # self.jump_slider_steps(-5)
+            # p = self.slider.value()
+            # p = p - int(500000000 / self.media.get_duration())
+            # self.set_position(p)  
+
+    def forward_video(self):
+        self.jump_frames(2)
+        # self.jump_slider_steps(5)
+            # p = self.slider.value()
+            # p = p + int(500000000 / self.media.get_duration())
+            # self.set_position(p)
+            
     def changeDirectory(self):
         self.parrentDirectory = QtWidgets.QFileDialog.getExistingDirectory(
             self, "Select Folder"
@@ -800,12 +882,11 @@ class Window(QWidget):
 
         if filename != "":
             title = str(os.path.basename(filename)).split(".")[0]
-            with open(filename) as f:
+            with open(filename,encoding='utf-8') as f:
                 lines = f.read().splitlines()
             print("Opened time panel:", title)
 
             self.num_panels += 1
-
             self.panel_index = self.num_panels
 
             self.tasklist[self.panel_index] = []
@@ -823,7 +904,7 @@ class Window(QWidget):
             self.form_title[self.panel_index].setStyleSheet("color: white")
             self.form_title[self.panel_index].setAlignment(Qt.AlignCenter)
             self.form_title[self.panel_index].setFont(
-                QFont("Times", 12, weight=QFont.Bold)
+                QFont("monospace", 12, weight=QFont.Bold)  # 系统默认等宽字体
             )
             self.panelRemoveBtn[self.panel_index] = QPushButton("Exit")
             self.panelRemoveBtn[self.panel_index].clicked.connect(
@@ -832,70 +913,90 @@ class Window(QWidget):
 
             self.formLayout[self.panel_index].addRow(
                 self.form_title[self.panel_index]
-            )  # , self.panelRemoveBtn[self.panel_index])
+            )
 
-            # panel_width = 200
-            for i, line in enumerate(lines):
+            # 使用独立的索引来跟踪实际的任务项
+            task_index = 0
+            
+            for line_index, line in enumerate(lines):
                 line = line.split("#")
+                print(line[0])
+                
+                if line[0] != '--':
+                    # 创建任务相关的控件，使用 task_index 而不是 line_index
+                    self.tasklist[self.panel_index].append(QLabel(line[0]))
+                    self.tasklist[self.panel_index][task_index].setStyleSheet(
+                        "background-color: black ; color: white"
+                    )
+                    self.tasklist[self.panel_index][task_index].setFont(
+                        QFont("monospace", 10, weight=QFont.Bold)  # 系统默认等宽字体
+                    )
+                    self.tasklist[self.panel_index][task_index].setWordWrap(True)
+                    
+                    self.startingButtonlist[self.panel_index].append(QPushButton("starts"))
+                    self.startingButtonlist[self.panel_index][task_index].setFixedWidth(50)
+                    self.startingTimelist[self.panel_index].append(QLabel("0"))
+                    self.startingTimelist[self.panel_index][task_index].setStyleSheet("color: white")
+                    self.startingButtonlist[self.panel_index][task_index].clicked.connect(
+                        partial(self.onstartbuttonClicked, self.panel_index, task_index)
+                    )
+                    
+                    self.endingButtonlist[self.panel_index].append(QPushButton("ends"))
+                    self.endingButtonlist[self.panel_index][task_index].setFixedWidth(50)
+                    self.endingTimelist[self.panel_index].append(QLabel("0"))
+                    self.endingTimelist[self.panel_index][task_index].setStyleSheet("color: white")
+                    self.endingButtonlist[self.panel_index][task_index].clicked.connect(
+                        partial(self.onendbuttonClicked, self.panel_index, task_index)
+                    )
+                    
+                    if len(line) == 3:
+                        self.startingButtonlist[self.panel_index][task_index].setToolTip(line[1])
+                        self.endingButtonlist[self.panel_index][task_index].setToolTip(line[2])
+                    
+                    self.saveEntryBtn[self.panel_index].append(QPushButton("save"))
+                    self.clearEntryBtn[self.panel_index].append(QPushButton("clear"))
+                    self.saveEntryBtn[self.panel_index][task_index].setFixedWidth(50)
+                    self.clearEntryBtn[self.panel_index][task_index].setFixedWidth(50)
+                    self.saveEntryBtn[self.panel_index][task_index].setEnabled(False)
+                    self.saveEntryBtn[self.panel_index][task_index].clicked.connect(
+                        partial(self.onsaveEntryBtnClicked, self.panel_index, task_index)
+                    )
+                    self.clearEntryBtn[self.panel_index][task_index].setEnabled(False)
+                    self.clearEntryBtn[self.panel_index][task_index].clicked.connect(
+                        partial(self.onclearEntryBtnClicked, self.panel_index, task_index)
+                    )
 
-                self.tasklist[self.panel_index].append(QLabel(line[0]))
-                self.tasklist[self.panel_index][i].setStyleSheet(
-                    "background-color: black ; color: white"
-                )
-                self.tasklist[self.panel_index][i].setFont(
-                    QFont("Times", 10, weight=QFont.Bold)
-                )
-                self.tasklist[self.panel_index][i].setWordWrap(True)
-                # self.tasklist[self.panel_index][i].setFixedWidth(panel_width)
-                self.startingButtonlist[self.panel_index].append(QPushButton("starts"))
-                self.startingButtonlist[self.panel_index][i].setFixedWidth(50)
-                self.startingTimelist[self.panel_index].append(QLabel("0"))
-                self.startingTimelist[self.panel_index][i].setStyleSheet("color: white")
-                self.startingButtonlist[self.panel_index][i].clicked.connect(
-                    partial(self.onstartbuttonClicked, self.panel_index, i)
-                )
-                self.endingButtonlist[self.panel_index].append(QPushButton("ends"))
-                self.endingButtonlist[self.panel_index][i].setFixedWidth(50)
-                self.endingTimelist[self.panel_index].append(QLabel("0"))
-                self.endingTimelist[self.panel_index][i].setStyleSheet("color: white")
-                self.endingButtonlist[self.panel_index][i].clicked.connect(
-                    partial(self.onendbuttonClicked, self.panel_index, i)
-                )
-                if len(line) == 3:
-                    self.startingButtonlist[self.panel_index][i].setToolTip(line[1])
-                    self.endingButtonlist[self.panel_index][i].setToolTip(line[2])
-                self.saveEntryBtn[self.panel_index].append(QPushButton("save"))
-                self.clearEntryBtn[self.panel_index].append(QPushButton("clear"))
-                self.saveEntryBtn[self.panel_index][i].setFixedWidth(50)
-                self.clearEntryBtn[self.panel_index][i].setFixedWidth(50)
-                self.saveEntryBtn[self.panel_index][i].setEnabled(False)
-                self.saveEntryBtn[self.panel_index][i].clicked.connect(
-                    partial(self.onsaveEntryBtnClicked, self.panel_index, i)
-                )
-                self.clearEntryBtn[self.panel_index][i].setEnabled(False)
-                self.clearEntryBtn[self.panel_index][i].clicked.connect(
-                    partial(self.onclearEntryBtnClicked, self.panel_index, i)
-                )
-
-                self.formLayout[self.panel_index].addRow(
-                    self.tasklist[self.panel_index][i]
-                )
-                self.formLayout[self.panel_index].addRow(
-                    self.startingButtonlist[self.panel_index][i],
-                    self.startingTimelist[self.panel_index][i],
-                )
-                self.formLayout[self.panel_index].addRow(
-                    self.endingButtonlist[self.panel_index][i],
-                    self.endingTimelist[self.panel_index][i],
-                )
-                self.formLayout[self.panel_index].addRow(
-                    self.saveEntryBtn[self.panel_index][i],
-                    self.clearEntryBtn[self.panel_index][i],
-                )
-            # —————— Add “Save All” button for this time panel ——————
+                    # 添加到布局
+                    self.formLayout[self.panel_index].addRow(
+                        self.tasklist[self.panel_index][task_index]
+                    )
+                    self.formLayout[self.panel_index].addRow(
+                        self.startingButtonlist[self.panel_index][task_index],
+                        self.startingTimelist[self.panel_index][task_index],
+                    )
+                    self.formLayout[self.panel_index].addRow(
+                        self.endingButtonlist[self.panel_index][task_index],
+                        self.endingTimelist[self.panel_index][task_index],
+                    )
+                    self.formLayout[self.panel_index].addRow(
+                        self.saveEntryBtn[self.panel_index][task_index],
+                        self.clearEntryBtn[self.panel_index][task_index],
+                    )
+                    
+                    # 只有在创建实际任务项时才增加 task_index
+                    task_index += 1
+                    
+                else:
+                    # 添加红色分隔线
+                    separator = QFrame()
+                    separator.setFrameShape(QFrame.HLine)
+                    separator.setFrameShadow(QFrame.Plain)
+                    separator.setStyleSheet("background-color: red; border: none; height: 3px;")
+                    separator.setFixedHeight(3)
+                    self.formLayout[self.panel_index].addRow(separator)
+                    
+            # 添加 "Save All" 按钮
             saveAllBtn = QPushButton("Save All")
-            # saveAllBtn.setFixedWidth(100) 
-            # when clicked, call our helper save_panel(panel_index)
             saveAllBtn.clicked.connect(lambda _, idx=self.panel_index: self.save_panel(idx))
             self.formLayout[self.panel_index].addRow(saveAllBtn)
 
@@ -906,11 +1007,6 @@ class Window(QWidget):
             self.scroll[self.panel_index].setWidgetResizable(True)
             self.scroll[self.panel_index].setFixedWidth(150)
             self.scroll[self.panel_index].setFocusPolicy(Qt.StrongFocus)
-            
-            # Calculate content-based width
-            # content_width = self.groupbox[self.panel_index].sizeHint().width()
-            # scrollbar_width = self.scroll[self.panel_index].verticalScrollBar().sizeHint().width()
-            # self.scroll[self.panel_index].setMinimumWidth(200 )
 
             self.mainLayout.addWidget(self.scroll[self.panel_index])
 
@@ -922,7 +1018,7 @@ class Window(QWidget):
         if filename != "" and str(filename).endswith(".txt"):
             title = str(os.path.basename(filename)).split(".")[0]
 
-            with open(filename) as f:
+            with open(filename,encoding='utf-8') as f:
                 lines = f.read().splitlines()
                 # with open('{}/{}_scores.txt'.format(self.save_directory, title), 'w') as out:
                 #     for line in lines:
@@ -955,7 +1051,7 @@ class Window(QWidget):
             self.form_title[self.panel_index].setStyleSheet("color: white")
             self.form_title[self.panel_index].setAlignment(Qt.AlignCenter)
             self.form_title[self.panel_index].setFont(
-                QFont("Times", 12, weight=QFont.Bold)
+                QFont("monospace", 12, weight=QFont.Bold)  # 系统默认等宽字体
             )
             self.panelRemoveBtn[self.panel_index] = QPushButton("Exit")
             self.panelRemoveBtn[self.panel_index].clicked.connect(
@@ -990,7 +1086,7 @@ class Window(QWidget):
                     "background-color: black ; color: white"
                 )
                 self.tasklist[self.panel_index][i].setFont(
-                    QFont("Times", 10, weight=QFont.Bold)
+                    QFont("monospace", 10, weight=QFont.Bold)  # 系统默认等宽字体
                 )
                 self.tasklist[self.panel_index][i].setWordWrap(True)
                 self.tasklist[self.panel_index][i].setFixedWidth(100)
@@ -1069,6 +1165,7 @@ class Window(QWidget):
                             self.form_title[self.panel_index].text(),
                         ),
                         "r",
+                        encoding='utf-8',
                     ) as f:
                         lines = f.readlines()
                         for line in lines:
@@ -1107,6 +1204,7 @@ class Window(QWidget):
                                 self.form_title[self.panel_index].text(),
                             ),
                             "a",
+                            encoding='utf-8',
                         ) as out:
                             for i in range(len(self.groupButtonlist[self.panel_index])):
                                 out.write(
@@ -1185,7 +1283,7 @@ class Window(QWidget):
         task_name = self.tasklist[panel_index][i].text()
         starting_time = self.startingTimelist[panel_index][i].text()
         ending_time = self.endingTimelist[panel_index][i].text()
-        with open("{}/{}.txt".format(self.save_directory, form_title), "a") as f:
+        with open("{}/{}.txt".format(self.save_directory, form_title), "a",encoding='utf-8') as f:
             f.write("{} : ({},{})\n".format(task_name, starting_time, ending_time))
 
         # self.startingTimelist[panel_index][i].setText('0')
@@ -1289,7 +1387,8 @@ class Window(QWidget):
             for json_file in os.listdir(self.image_save_directory):
                 if json_file.endswith(".json"):
                     with open(
-                        os.path.join(self.image_save_directory, json_file)
+                        os.path.join(self.image_save_directory, json_file),
+                        encoding='utf-8'
                     ) as annotation_file:
                         data = json.load(annotation_file)
                         for shape in data["shapes"]:
@@ -1341,7 +1440,7 @@ class Window(QWidget):
             #     score = 'No'
 
             with open(
-                "{}/{}_scores.txt".format(self.save_directory, form_title), "r"
+                "{}/{}_scores.txt".format(self.save_directory, form_title), "r",encoding='utf-8',
             ) as f:
                 lines = f.readlines()
                 for index, line in enumerate(lines):
@@ -1349,7 +1448,7 @@ class Window(QWidget):
                         lines[index] = "{} : {}\n".format(rating_item, score)
 
             with open(
-                "{}/{}_scores.txt".format(self.save_directory, form_title), "w"
+                "{}/{}_scores.txt".format(self.save_directory, form_title), "w",encoding='utf-8'
             ) as f:
                 for line in lines:
                     f.write(line)

@@ -1,8 +1,37 @@
-Explore anatomy
-Isolate Triangle
-Isolate cystic duct
-Isolate cystic artery
-Dissect gallbladder
-Clean-up
-Bag gallbladder
-Extract gallbladder
+三平面切口一平面触碰
+三平面切口一平面划开
+三平面切口二平面穿刺
+三平面切口二平面进入
+双平面切口一平面触碰
+双平面切口一平面穿刺
+双平面切口二平面进入
+--
+侧切口刀触碰
+侧切口刀穿刺
+--
+染色剂注入
+染色剂冲洗
+--
+粘弹剂注入
+冲洗前房
+粘弹剂注入
+截囊针破囊
+撕囊（抓）
+撕囊（撕）
+撕囊（取）
+针头置于前囊膜
+注入BSS见后囊膜水波xx
+针头进入晶状体皮质
+注入BSS见液体沿内核xx
+phaco刻槽
+phaco分核
+phaco
+核娩出（ECCE）
+劈核
+转核
+皮质吸收
+后囊抛光
+IOL植入
+主切口水密 
+辅切口水密
+缝合切口
