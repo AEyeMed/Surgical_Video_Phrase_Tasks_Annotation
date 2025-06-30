@@ -1266,7 +1266,7 @@ class Window(QWidget):
 
         self.startingTimelist[panel_index][i].setText(str(value))
         self.startingTimelist[panel_index][i].setStyleSheet("color: white")
-        self.saveEntryBtn[panel_index][i].setEnabled(False)
+        self.saveEntryBtn[panel_index][i].setEnabled(True)
         self.clearEntryBtn[panel_index][i].setEnabled(True)
 
     def onendbuttonClicked(self, panel_index, i):
@@ -1283,8 +1283,51 @@ class Window(QWidget):
         task_name = self.tasklist[panel_index][i].text()
         starting_time = self.startingTimelist[panel_index][i].text()
         ending_time = self.endingTimelist[panel_index][i].text()
-        with open("{}/{}.txt".format(self.save_directory, form_title), "a",encoding='utf-8') as f:
-            f.write("{} : ({},{})\n".format(task_name, starting_time, ending_time))
+        
+        # Create the new entry
+        new_entry = "{} : ({},{})\n".format(task_name, starting_time, ending_time)
+        
+        # Read existing entries from file
+        file_path = "{}/{}.txt".format(self.save_directory, form_title)
+        existing_entries = []
+        
+        try:
+            with open(file_path, "r", encoding='utf-8') as f:
+                existing_entries = f.readlines()
+        except FileNotFoundError:
+            # File doesn't exist yet, which is fine
+            pass
+        
+        # Add the new entry to the list
+        existing_entries.append(new_entry)
+        
+        # Parse and sort entries by starting time
+        def parse_time(time_str):
+            """Convert time string like '0:00:05' to seconds for sorting"""
+            parts = time_str.split(':')
+            if len(parts) == 3:  # h:mm:ss
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            elif len(parts) == 2:  # m:ss
+                return int(parts[0]) * 60 + int(parts[1])
+            else:
+                return 0
+        
+        def get_starting_time(entry_line):
+            """Extract starting time from entry line for sorting"""
+            try:
+                # Extract the time part between parentheses
+                time_part = entry_line.split('(')[1].split(')')[0]
+                starting_time = time_part.split(',')[0]
+                return parse_time(starting_time)
+            except:
+                return 0
+        
+        # Sort entries by starting time
+        existing_entries.sort(key=get_starting_time)
+        
+        # Write all entries back to file
+        with open(file_path, "w", encoding='utf-8') as f:
+            f.writelines(existing_entries)
 
         # self.startingTimelist[panel_index][i].setText('0')
         # self.endingTimelist[panel_index][i].setText('0')
@@ -1294,11 +1337,12 @@ class Window(QWidget):
         """
         # loop through each task in this panel
         for i in range(len(self.tasklist[panel_index])):
-            # only save if there’s a non-default interval
-            start = self.startingTimelist[panel_index][i].text()
-            end   = self.endingTimelist[panel_index][i].text()
-            if start != "0" or end != "0":
-                self.onsaveEntryBtnClicked(panel_index, i)
+            if self.saveEntryBtn[panel_index][i].isEnabled():
+                # only save if there’s a non-default interval
+                start = self.startingTimelist[panel_index][i].text()
+                end   = self.endingTimelist[panel_index][i].text()
+                if start != "0": #( end can be "0")
+                    self.onsaveEntryBtnClicked(panel_index, i)
     def save_all_ratings(self, panel_index):
         """
         Save all checked rating entries in this panel.
@@ -1309,6 +1353,30 @@ class Window(QWidget):
                 self.save_rating_entry(panel_index, i)
 
     def onclearEntryBtnClicked(self, panel_index, i):
+        form_title = self.form_title[panel_index].text()
+        task_name = self.tasklist[panel_index][i].text()
+        
+        # First, read the file to check the last line
+        if self.clearEntryBtn[panel_index][i].isEnabled():
+            file_path = "{}/{}.txt".format(self.save_directory, form_title)
+            try:
+                with open(file_path, "r", encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                # Check if file has content and if last line matches task_name
+                if lines and (task_name in lines[-1].strip()):
+                    # Remove the last line
+                    lines = lines[:-1]
+                    
+                    # Write back the modified content
+                    with open(file_path, "w", encoding='utf-8') as f:
+                        f.writelines(lines)
+                        
+            except FileNotFoundError:
+                # File doesn't exist yet, nothing to delete
+                pass
+        
+
         self.saveEntryBtn[panel_index][i].setEnabled(False)
         self.clearEntryBtn[panel_index][i].setEnabled(False)
         self.startingTimelist[panel_index][i].setText("0")
