@@ -548,9 +548,12 @@ class Window(QWidget):
         self.saveEntryBtn = [None] * 10
         self.clearEntryBtn = [None] * 10
         self.ratingButtonslist = [None] * 10
+        self.snapshot_labels = [None] * 10
         self.yesButtonlist = [None] * 10
         self.noButtonlist = [None] * 10
         self.ratingItemlist = [None] * 10
+        self.snapshotButtonlist = [None] * 10
+        self.snapshotTimelist = [None] * 10
         self.groupButtonlist = [None] * 10
 
         self.timer = QTimer(self)
@@ -577,7 +580,7 @@ class Window(QWidget):
         
         self.add_time_panel_from_file_predefined("samples/phase.txt")
         self.add_time_panel_from_file_predefined("samples/task.txt")
-        # self.add_rating_panel_from_file_predefined("path/to/rating_panel1.txt")
+        self.add_rating_panel_from_file_predefined("samples/assessment.txt")
         # self.add_rating_panel_from_file_predefined("path/to/rating_panel2.txt")
                 
 
@@ -694,6 +697,7 @@ class Window(QWidget):
                 self.clearPanels()
                 for panel_index in range(1, self.num_panels + 1):
                     if self.groupButtonlist[panel_index]:
+                        # print(os.path.exists(self.save_directory+ "/"+ self.form_title[self.panel_index].text()+ "_scores.txt"))
                         if not os.path.exists(
                             self.save_directory
                             + "/"
@@ -1018,139 +1022,243 @@ class Window(QWidget):
         if filename != "" and str(filename).endswith(".txt"):
             title = str(os.path.basename(filename)).split(".")[0]
 
-            with open(filename,encoding='utf-8') as f:
+            with open(filename, encoding='utf-8') as f:
                 lines = f.read().splitlines()
-                # with open('{}/{}_scores.txt'.format(self.save_directory, title), 'w') as out:
-                #     for line in lines:
-                #         out.write(line + '\n')
+                
             print("Opened rating panel:", title)
 
             self.num_panels += 1
-
             self.panel_index = self.num_panels
 
+            # 初始化各种列表
             self.tasklist[self.panel_index] = []
-
+            self.snapshotButtonlist[self.panel_index] = []
+            self.snapshotTimelist[self.panel_index] = []
             self.yesButtonlist[self.panel_index] = []
             self.noButtonlist[self.panel_index] = []
             self.ratingButtonslist[self.panel_index] = []
+            self.snapshot_labels[self.panel_index] = []  # 用于存储快照标签
             self.groupButtonlist[self.panel_index] = []
+            self.saveEntryBtn[self.panel_index] = []
+            self.clearEntryBtn[self.panel_index] = []
 
+            # 创建标签
             self.yes_label = QLabel("Yes")
             self.yes_label.setStyleSheet("color: white")
-            # self.yes_label.setAlignment(Qt.AlignRight)
             self.no_label = QLabel("No")
             self.no_label.setStyleSheet("color: white")
-            # self.no_label.setAlignment(Qt.AlignRight)
 
+            # 创建主布局组件
             self.groupbox[self.panel_index] = QGroupBox()
             self.formLayout[self.panel_index] = QFormLayout()
-            # self.formLayout[self.panel_index].setContentsMargins(0,0,0,0)
             self.formLayout[self.panel_index].setVerticalSpacing(10)
+            
+            # 标题
             self.form_title[self.panel_index] = QLabel(title)
             self.form_title[self.panel_index].setStyleSheet("color: white")
             self.form_title[self.panel_index].setAlignment(Qt.AlignCenter)
             self.form_title[self.panel_index].setFont(
-                QFont("monospace", 12, weight=QFont.Bold)  # 系统默认等宽字体
+                QFont("monospace", 12, weight=QFont.Bold)
             )
+            
+            # 移除按钮
             self.panelRemoveBtn[self.panel_index] = QPushButton("Exit")
             self.panelRemoveBtn[self.panel_index].clicked.connect(
                 partial(self.onpanelRemoveBtnClicked, self.panel_index)
             )
 
-            # firstline_empty = QLabel().setFixedWidth(100)
-            # hbLayout1 = QHBoxLayout()
-            # hbLayout1.addWidget(self.yes_label)
-            # hbLayout1.addWidget(self.no_label)
-            # hbLayout1.setContentsMargins(0, 0, 0, 0)
-            #
-            # container1 = QWidget()
-            # container1.setLayout(hbLayout1)
+            # 添加标题
+            self.formLayout[self.panel_index].addRow(self.form_title[self.panel_index])
 
-            self.formLayout[self.panel_index].addRow(
-                self.form_title[self.panel_index]
-            )  # , self.panelRemoveBtn[self.panel_index])
-            # self.formLayout[self.panel_index].addRow(firstline_empty, container1)
+            # 用于分别追踪rating和snapshot的索引
+            rating_index = 0
+            snapshot_index = 0
+            task_index = 0  # 用于追踪所有任务的索引
+            
+            # 处理每一行
             for i, line in enumerate(lines):
                 line = line.split("#")
-
+                
                 num_scores = 2
                 if len(line) > 1:
                     try:
                         num_scores = int(line[1])
                     except:
                         num_scores = 2
-
-                self.tasklist[self.panel_index].append(QLabel(line[0]))
-                self.tasklist[self.panel_index][i].setStyleSheet(
-                    "background-color: black ; color: white"
-                )
-                self.tasklist[self.panel_index][i].setFont(
-                    QFont("monospace", 10, weight=QFont.Bold)  # 系统默认等宽字体
-                )
-                self.tasklist[self.panel_index][i].setWordWrap(True)
-                self.tasklist[self.panel_index][i].setFixedWidth(100)
-
-                self.ratingButtonslist[self.panel_index].append([])
-
-                for j in range(num_scores):
-                    self.ratingButtonslist[self.panel_index][i].append(
-                        QRadioButton(str(j))
-                    )
-                    self.ratingButtonslist[self.panel_index][i][j].setStyleSheet(
+                
+                if num_scores > 0:
+                    # 处理评分项
+                    self.tasklist[self.panel_index].append(QLabel(line[0]))
+                    self.tasklist[self.panel_index][task_index].setStyleSheet(
                         "background-color: black ; color: white"
                     )
-
-                # self.yesButtonlist[self.panel_index].append(QRadioButton())
-                # self.yesButtonlist[self.panel_index][i].clicked.connect()
-                # self.noButtonlist[self.panel_index].append(QRadioButton())
-
-                self.groupButtonlist[self.panel_index].append(QButtonGroup())
-                for j in range(num_scores):
-                    self.groupButtonlist[self.panel_index][i].addButton(
-                        self.ratingButtonslist[self.panel_index][i][j]
+                    self.tasklist[self.panel_index][task_index].setFont(
+                        QFont("monospace", 10, weight=QFont.Bold)
                     )
-                # self.groupButtonlist[self.panel_index][i].addButton(self.yesButtonlist[self.panel_index][i])
-                # self.groupButtonlist[self.panel_index][i].addButton(self.noButtonlist[self.panel_index][i])
-                self.groupButtonlist[self.panel_index][i].buttonClicked.connect(
-                    partial(self.save_rating_entry, self.panel_index, i)
-                )
+                    self.tasklist[self.panel_index][task_index].setWordWrap(True)
+                    # self.tasklist[self.panel_index][task_index].setFixedWidth(50)
 
-                hbLayout = QHBoxLayout()
-                for j in range(num_scores):
-                    hbLayout.addWidget(self.ratingButtonslist[self.panel_index][i][j])
-                # hbLayout.addWidget(self.yesButtonlist[self.panel_index][i])
-                # hbLayout.addWidget(self.noButtonlist[self.panel_index][i])
-                hbLayout.setContentsMargins(0, 0, 0, 0)
-                container = QWidget()
-                container.setLayout(hbLayout)
-                self.formLayout[self.panel_index].addRow(
-                    self.tasklist[self.panel_index][i], container
-                )
-                # self.formLayout[self.panel_index].addRow(self.startingButtonlist[self.panel_index][i],
-                #                                          self.startingTimelist[self.panel_index][i])
-                # self.formLayout[self.panel_index].addRow(self.endingButtonlist[self.panel_index][i],
-                #                                          self.endingTimelist[self.panel_index][i])
-                # self.formLayout[self.panel_index].addRow(self.saveEntryBtn[self.panel_index][i],
-                #                                          self.clearEntryBtn[self.panel_index][i])
+                    # 创建评分按钮
+                    self.ratingButtonslist[self.panel_index].append([])
+                    for j in range(num_scores):
+                        self.ratingButtonslist[self.panel_index][rating_index].append(
+                            QRadioButton(str(j))
+                        )
+                        self.ratingButtonslist[self.panel_index][rating_index][j].setStyleSheet(
+                            "background-color: black ; color: white"
+                        )
 
-            # —————— Add “Save All Ratings” button for this rating panel ——————
+                    # 创建按钮组
+                    self.groupButtonlist[self.panel_index].append(QButtonGroup())
+                    for j in range(num_scores):
+                        self.groupButtonlist[self.panel_index][rating_index].addButton(
+                            self.ratingButtonslist[self.panel_index][rating_index][j]
+                        )
+                    
+                    self.groupButtonlist[self.panel_index][rating_index].buttonClicked.connect(
+                        partial(self.save_rating_entry, self.panel_index, rating_index)
+                    )
+
+                    # # 创建save和clear按钮
+                    # self.saveEntryBtn[self.panel_index].append(QPushButton("save"))
+                    # self.clearEntryBtn[self.panel_index].append(QPushButton("clear"))
+                    # self.saveEntryBtn[self.panel_index][task_index].setFixedWidth(50)
+                    # self.clearEntryBtn[self.panel_index][task_index].setFixedWidth(50)
+                    # self.saveEntryBtn[self.panel_index][task_index].setEnabled(False)
+                    # self.saveEntryBtn[self.panel_index][task_index].clicked.connect(
+                    #     partial(self.onsaveEntryBtnClicked, self.panel_index, task_index)
+                    # )
+                    # self.clearEntryBtn[self.panel_index][task_index].setEnabled(False)
+                    # self.clearEntryBtn[self.panel_index][task_index].clicked.connect(
+                    #     partial(self.onclearEntryBtnClicked, self.panel_index, task_index)
+                    # )
+
+                    # 创建垂直布局放置按钮
+                    vbLayout = QVBoxLayout()
+                    for j in range(num_scores):
+                        vbLayout.addWidget(self.ratingButtonslist[self.panel_index][rating_index][j])
+                    vbLayout.setContentsMargins(0, 0, 0, 0)
+                    container = QWidget()
+                    container.setLayout(vbLayout)
+                    
+                    # 创建水平布局放置save和clear按钮
+                    # hbLayout = QHBoxLayout()
+                    # hbLayout.addWidget(self.saveEntryBtn[self.panel_index][task_index])
+                    # hbLayout.addWidget(self.clearEntryBtn[self.panel_index][task_index])
+                    # hbLayout.setContentsMargins(0, 0, 0, 0)
+                    # buttonContainer = QWidget()
+                    # buttonContainer.setLayout(hbLayout)
+                    
+                    # 添加到表单布局
+                    self.formLayout[self.panel_index].addRow(
+                        self.tasklist[self.panel_index][task_index], container
+                    )
+                    # self.formLayout[self.panel_index].addRow(buttonContainer)
+                    
+                    rating_index += 1
+                    task_index += 1
+                    
+                elif num_scores == 0:
+                    # 处理快照项 - 先存储标签信息，稍后统一添加
+                                    # 添加快照标签
+                    snapshot_label = QLabel(line[0])
+                    snapshot_label.setStyleSheet("background-color: black ; color: white")
+                    snapshot_label.setFont(QFont("monospace", 10, weight=QFont.Bold))
+                    snapshot_label.setWordWrap(True)
+                    snapshot_label.setFixedWidth(50)
+                    self.snapshot_labels[self.panel_index].append(snapshot_label)
+                    task_index += 1
+
+            # 添加"Save All Ratings"按钮
             saveAllRatingsBtn = QPushButton("Save All Ratings")
             saveAllRatingsBtn.clicked.connect(
                 lambda _, idx=self.panel_index: self.save_all_ratings(idx)
             )
             self.formLayout[self.panel_index].addRow(saveAllRatingsBtn)
 
+            # 添加红色分割线
+            separator = QFrame()
+            separator.setFrameShape(QFrame.HLine)
+            separator.setFrameShadow(QFrame.Sunken)
+            separator.setStyleSheet("color: red; background-color: red;")
+            separator.setFixedHeight(20)
+            self.formLayout[self.panel_index].addRow(separator)
+
+            # 现在处理快照项
+            snapshot_index = 0
+            for snapshot_label in self.snapshot_labels[self.panel_index]:
+
+                
+                # 创建快照按钮和时间标签
+                self.snapshotButtonlist[self.panel_index].append(QPushButton("Start"))
+                self.snapshotButtonlist[self.panel_index][snapshot_index].setFixedWidth(50)
+                
+                self.snapshotTimelist[self.panel_index].append(QLabel("0"))
+                self.snapshotTimelist[self.panel_index][snapshot_index].setStyleSheet("color: white")
+                
+                self.snapshotButtonlist[self.panel_index][snapshot_index].clicked.connect(
+                    partial(self.onsnapshotbuttonClicked, self.panel_index, snapshot_index)
+                )
+                
+                # 创建save和clear按钮
+                self.saveEntryBtn[self.panel_index].append(QPushButton("save"))
+                self.clearEntryBtn[self.panel_index].append(QPushButton("clear"))
+                save_btn_index = len(self.saveEntryBtn[self.panel_index]) - 1
+                self.saveEntryBtn[self.panel_index][save_btn_index].setFixedWidth(50)
+                self.clearEntryBtn[self.panel_index][save_btn_index].setFixedWidth(50)
+                self.saveEntryBtn[self.panel_index][save_btn_index].setEnabled(False)
+                self.saveEntryBtn[self.panel_index][save_btn_index].clicked.connect(
+                    partial(self.onsnapsaveEntryBtnClicked, self.panel_index, save_btn_index)
+                )
+                self.clearEntryBtn[self.panel_index][save_btn_index].setEnabled(False)
+                self.clearEntryBtn[self.panel_index][save_btn_index].clicked.connect(
+                    partial(self.onsnapclearEntryBtnClicked, self.panel_index, save_btn_index)
+                )
+                
+                # 创建水平布局放置按钮和时间
+                hbLayout1 = QHBoxLayout()
+                hbLayout1.addWidget(self.snapshotButtonlist[self.panel_index][snapshot_index])
+                hbLayout1.addWidget(self.snapshotTimelist[self.panel_index][snapshot_index])
+                hbLayout1.setContentsMargins(0, 0, 0, 0)
+                container1 = QWidget()
+                container1.setLayout(hbLayout1)
+                
+                # 创建水平布局放置save和clear按钮
+                hbLayout2 = QHBoxLayout()
+                hbLayout2.addWidget(self.saveEntryBtn[self.panel_index][save_btn_index])
+                hbLayout2.addWidget(self.clearEntryBtn[self.panel_index][save_btn_index])
+                hbLayout2.setContentsMargins(0, 0, 0, 0)
+                container2 = QWidget()
+                container2.setLayout(hbLayout2)
+                
+                self.formLayout[self.panel_index].addRow(snapshot_label)
+                self.formLayout[self.panel_index].addRow(container1)
+                self.formLayout[self.panel_index].addRow(container2)
+                
+                snapshot_index += 1
+
+            # 添加"Save All Snapshots"按钮
+            if len(self.snapshot_labels[self.panel_index]) > 0:  # 只有当有快照项时才添加
+                saveAllSnapshotsBtn = QPushButton("Save All Snapshots")
+                saveAllSnapshotsBtn.clicked.connect(
+                    lambda _, idx=self.panel_index: self.save_all_warning_tasks(idx)
+                )
+                self.formLayout[self.panel_index].addRow(saveAllSnapshotsBtn)
+
+            # 设置主布局
             self.groupbox[self.panel_index].setLayout(self.formLayout[self.panel_index])
             
-            
+            # 创建滚动区域
             self.scroll[self.panel_index] = QScrollArea()
             self.scroll[self.panel_index].setWidget(self.groupbox[self.panel_index])
             self.scroll[self.panel_index].setWidgetResizable(True)
-            self.scroll[self.panel_index].setFixedWidth(300)
+            self.scroll[self.panel_index].setFixedWidth(150)
             self.scroll[self.panel_index].setFocusPolicy(Qt.StrongFocus)
             self.mainLayout.addWidget(self.scroll[self.panel_index])
 
+            # print(' rating....',self.save_directory)
+            
+            
             if self.save_directory:
                 if os.path.exists(
                     self.save_directory
@@ -1269,6 +1377,14 @@ class Window(QWidget):
         self.saveEntryBtn[panel_index][i].setEnabled(True)
         self.clearEntryBtn[panel_index][i].setEnabled(True)
 
+    def onsnapshotbuttonClicked(self, panel_index, i):
+        value = self.getSliderValue()
+
+        self.snapshotTimelist[panel_index][i].setText(str(value))
+        self.snapshotTimelist[panel_index][i].setStyleSheet("color: white")
+        self.saveEntryBtn[panel_index][i].setEnabled(True)
+        self.clearEntryBtn[panel_index][i].setEnabled(True)
+
     def onendbuttonClicked(self, panel_index, i):
         value = self.getSliderValue()
 
@@ -1331,6 +1447,58 @@ class Window(QWidget):
 
         # self.startingTimelist[panel_index][i].setText('0')
         # self.endingTimelist[panel_index][i].setText('0')
+        
+    def onsnapsaveEntryBtnClicked(self, panel_index, i):
+        self.saveEntryBtn[panel_index][i].setEnabled(False)
+        form_title = self.form_title[panel_index].text()
+        task_name = self.snapshot_labels[panel_index][i].text()
+        starting_time = self.snapshotTimelist[panel_index][i].text()
+        
+        # Create the new entry
+        new_entry = "{} : ({},{})\n".format(task_name, starting_time, 0)
+        
+        # Read existing entries from file
+        file_path = "{}/{}.txt".format(self.save_directory, form_title)
+        existing_entries = []
+        
+        try:
+            with open(file_path, "r", encoding='utf-8') as f:
+                existing_entries = f.readlines()
+        except FileNotFoundError:
+            # File doesn't exist yet, which is fine
+            pass
+        
+        # Add the new entry to the list
+        existing_entries.append(new_entry)
+        
+        # Parse and sort entries by starting time
+        def parse_time(time_str):
+            """Convert time string like '0:00:05' to seconds for sorting"""
+            parts = time_str.split(':')
+            if len(parts) == 3:  # h:mm:ss
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + int(parts[2])
+            elif len(parts) == 2:  # m:ss
+                return int(parts[0]) * 60 + int(parts[1])
+            else:
+                return 0
+        
+        def get_starting_time(entry_line):
+            """Extract starting time from entry line for sorting"""
+            try:
+                # Extract the time part between parentheses
+                time_part = entry_line.split('(')[1].split(')')[0]
+                starting_time = time_part.split(',')[0]
+                return parse_time(starting_time)
+            except:
+                return 0
+        
+        # Sort entries by starting time
+        existing_entries.sort(key=get_starting_time)
+        
+        # Write all entries back to file
+        with open(file_path, "w", encoding='utf-8') as f:
+            f.writelines(existing_entries)        
+
     def save_panel(self, panel_index):
         """
         Save every time-entry in this time-panel.
@@ -1343,6 +1511,18 @@ class Window(QWidget):
                 end   = self.endingTimelist[panel_index][i].text()
                 if start != "0": #( end can be "0")
                     self.onsaveEntryBtnClicked(panel_index, i)
+    def save_all_warning_tasks(self, panel_index):
+        """
+        Save every time-entry in this time-panel.
+        """
+        # loop through each task in this panel
+        for i in range(len(self.snapshotButtonlist[panel_index])):
+            if self.saveEntryBtn[panel_index][i].isEnabled():
+                # only save if there’s a non-default interval
+                start = self.snapshotTimelist[panel_index][i].text()
+                if start != "0": #( end can be "0")
+                    self.onsnapsaveEntryBtnClicked(panel_index, i)
+                    
     def save_all_ratings(self, panel_index):
         """
         Save all checked rating entries in this panel.
@@ -1354,7 +1534,7 @@ class Window(QWidget):
 
     def onclearEntryBtnClicked(self, panel_index, i):
         form_title = self.form_title[panel_index].text()
-        task_name = self.tasklist[panel_index][i].text()
+        task_name = self.snapshot_labels[panel_index][i].text()
         
         # First, read the file to check the last line
         if self.clearEntryBtn[panel_index][i].isEnabled():
@@ -1381,6 +1561,35 @@ class Window(QWidget):
         self.clearEntryBtn[panel_index][i].setEnabled(False)
         self.startingTimelist[panel_index][i].setText("0")
         self.endingTimelist[panel_index][i].setText("0")
+
+    def onsnapclearEntryBtnClicked(self, panel_index, i):
+        form_title = self.form_title[panel_index].text()
+        task_name = self.snapshot_labels[panel_index][i].text()
+        
+        # First, read the file to check the last line
+        if self.clearEntryBtn[panel_index][i].isEnabled():
+            file_path = "{}/{}.txt".format(self.save_directory, form_title)
+            try:
+                with open(file_path, "r", encoding='utf-8') as f:
+                    lines = f.readlines()
+                
+                # Check if file has content and if last line matches task_name
+                if lines and (task_name in lines[-1].strip()):
+                    # Remove the last line
+                    lines = lines[:-1]
+                    
+                    # Write back the modified content
+                    with open(file_path, "w", encoding='utf-8') as f:
+                        f.writelines(lines)
+                        
+            except FileNotFoundError:
+                # File doesn't exist yet, nothing to delete
+                pass
+        
+
+        self.saveEntryBtn[panel_index][i].setEnabled(False)
+        self.clearEntryBtn[panel_index][i].setEnabled(False)
+        self.snapshotTimelist[panel_index][i].setText("0")
 
     def screenshotCall(self):
         # pause video if playing
@@ -1506,7 +1715,7 @@ class Window(QWidget):
             #     score = 'Yes'
             # elif self.noButtonlist[panel_index][i].isChecked():
             #     score = 'No'
-
+            # print("{}/{}_scores.txt".format(self.save_directory, form_title))
             with open(
                 "{}/{}_scores.txt".format(self.save_directory, form_title), "r",encoding='utf-8',
             ) as f:

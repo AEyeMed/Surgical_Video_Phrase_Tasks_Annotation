@@ -7,3 +7,5 @@
 3：	最终结果保存再outputs文件夹中，每个视频一个文件夹
 
 4：如果想要对于一个阶段进行多次标注，每次save之后，继续实用start ending 按钮然后再次进行保存
+
+5：评分系统设置，samples文件夹下编辑assessment.txt，按照name#score 格式，score表示有多少个得分分级。如果score为0则为预警帧保存模式
