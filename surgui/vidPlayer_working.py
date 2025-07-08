@@ -1534,7 +1534,7 @@ class Window(QWidget):
 
     def onclearEntryBtnClicked(self, panel_index, i):
         form_title = self.form_title[panel_index].text()
-        task_name = self.snapshot_labels[panel_index][i].text()
+        task_name = self.tasklist[panel_index][i].text()
         
         # First, read the file to check the last line
         if self.clearEntryBtn[panel_index][i].isEnabled():
