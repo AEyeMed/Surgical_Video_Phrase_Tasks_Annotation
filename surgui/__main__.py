@@ -1,13 +1,7 @@
-from surgui.vidPlayer import Window, Slider
-import sys
-from PyQt5.QtWidgets import QApplication
+"""Package entry point for the single supported SurgiAnnotate workbench."""
 
-
-def main():
-    app = QApplication(sys.argv)
-    window = Window()
-    sys.exit(app.exec_())
+from .vidPlayer_working import main
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

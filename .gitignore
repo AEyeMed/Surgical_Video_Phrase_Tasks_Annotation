@@ -1,14 +1,46 @@
-/.cache/
-/.pytest_cache/
+# Python bytecode and tool caches
+__pycache__/
+*.py[cod]
+*.pyd
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
 
-/build/
-/dist/
-/*.egg-info/
+# Local Python environments
+.venv/
+venv/
+env/
+surgui_venv/
 
-*.py[cdo]
+# Packaging and build output
+build/
+dist/
+packaged/
+*.egg-info/
+*.egg
 
+# Local executable assembled from the tracked source
+/vidPlayer_working.exe
 
-.DS_Store
+# External DesignMD reference checkout (has its own Git history)
+/designmd/
+
+# Annotation projects and exported case data
+/outputs/
+*.surgui.json
+*.surgui.previous.json
+
+# Editors and operating-system metadata
+.vscode/
 .idea/
-outputs
-surgui_venv
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local diagnostics
+*.log
+/vlc-help.txt

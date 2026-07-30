@@ -1,12 +1,18 @@
 # -*- mode: python ; coding: utf-8 -*-
+from pathlib import Path
 
-
+project_root = Path(SPECPATH)
 a = Analysis(
     ['surgui\\vidPlayer_working.py'],
     pathex=[],
     binaries=[],
-    datas=[],
-    hiddenimports=[],
+    datas=[
+        (str(project_root / 'samples'), 'samples'),
+        (str(project_root / 'DESIGN.md'), '.'),
+        (str(project_root / 'DESIGN.clinical-dark.md'), '.'),
+        (str(project_root / 'DESIGN.theatre-dim.md'), '.'),
+    ],
+    hiddenimports=['vlc', 'cv2'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
